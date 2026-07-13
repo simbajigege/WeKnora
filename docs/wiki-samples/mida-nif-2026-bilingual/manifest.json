@@ -1,0 +1,120 @@
+{
+  "sample_id": "mida-nif-2026-bilingual",
+  "source_pdf": "dataset/samples/Malaysia_MIDA_NIF_Manufacturing_Guidelines_2026.pdf",
+  "source_title_en": "Guidelines of Tax Incentives for New Investment in the Manufacturing Sector under the New Incentive Framework (NIF)",
+  "source_title_zh": "新激励框架下制造业新投资税收激励指南",
+  "source_date": "2026-01-15",
+  "language_mode": "zh-en-parallel",
+  "note": "Bilingual teaching-case Wiki sample following WeKnora wiki page conventions. chunk_refs are illustrative stable sample IDs, not database UUIDs.",
+  "pages": [
+    {
+      "slug": "summary/malaysia-mida-nif-manufacturing-guidelines-2026",
+      "title_en": "MIDA NIF Manufacturing Guidelines 2026",
+      "title_zh": "MIDA NIF 制造业指南 2026",
+      "page_type": "summary",
+      "summary_en": "Malaysia's 2026 NIF manufacturing guidelines define eligible applicants, incentive options, NIA scorecard evaluation, tiering mechanics, compliance duties, exclusions, and sustainability requirements.",
+      "summary_zh": "马来西亚 2026 年 NIF 制造业指南说明了适格申请人、激励选项、NIA 评分卡、分层机制、合规义务、排除范围和可持续要求。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": []
+    },
+    {
+      "slug": "entity/malaysian-investment-development-authority",
+      "title_en": "Malaysian Investment Development Authority",
+      "title_zh": "马来西亚投资发展局",
+      "page_type": "entity",
+      "aliases": ["MIDA"],
+      "summary_en": "MIDA receives applications, issues principle approval letters, monitors compliance reports, and serves as the contact point for NIF manufacturing incentives.",
+      "summary_zh": "MIDA 负责接收申请、签发原则批准函、监控合规报告，并作为 NIF 制造业激励的咨询窗口。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c004", "mida-nif-c005", "mida-nif-c008"]
+    },
+    {
+      "slug": "entity/new-incentive-framework",
+      "title_en": "New Incentive Framework",
+      "title_zh": "新激励框架",
+      "page_type": "entity",
+      "aliases": ["NIF"],
+      "summary_en": "NIF is Malaysia's 2026 phased incentive framework using tiered, outcome-based evaluation to attract high-growth and high-value manufacturing investments.",
+      "summary_zh": "NIF 是马来西亚 2026 年分阶段实施的激励框架，通过分层和结果导向评估吸引高增长、高价值制造业投资。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c002", "mida-nif-c006"]
+    },
+    {
+      "slug": "entity/national-investment-aspirations",
+      "title_en": "National Investment Aspirations",
+      "title_zh": "国家投资愿景",
+      "page_type": "entity",
+      "aliases": ["NIA"],
+      "summary_en": "NIA is a cornerstone strategy guiding NIF and supplying the scorecard pillars used to evaluate investment outcomes.",
+      "summary_zh": "NIA 是指导 NIF 的核心国家战略之一，并为评估投资成果的评分卡提供支柱框架。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c006", "mida-nif-c010"]
+    },
+    {
+      "slug": "entity/new-industrial-master-plan-2030",
+      "title_en": "New Industrial Master Plan 2030",
+      "title_zh": "新工业大蓝图 2030",
+      "page_type": "entity",
+      "aliases": ["NIMP 2030"],
+      "summary_en": "NIMP 2030 is a Malaysian industrial policy blueprint referenced by NIF to identify targeted manufacturing sectors and strategic alignment.",
+      "summary_zh": "NIMP 2030 是马来西亚工业政策蓝图，NIF 用它识别目标制造业领域和项目战略匹配度。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c011"]
+    },
+    {
+      "slug": "concept/special-tax-rate",
+      "title_en": "Special Tax Rate",
+      "title_zh": "特别税率",
+      "page_type": "concept",
+      "aliases": ["STR"],
+      "summary_en": "STR reduces corporate income tax for qualifying projects for up to 15 years, subject to annual compliance.",
+      "summary_zh": "STR 为符合条件的项目提供最高 15 年的企业所得税优惠税率，并受年度合规结果约束。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c002", "mida-nif-c007"]
+    },
+    {
+      "slug": "concept/investment-tax-allowance",
+      "title_en": "Investment Tax Allowance",
+      "title_zh": "投资税务津贴",
+      "page_type": "concept",
+      "aliases": ["ITA"],
+      "summary_en": "ITA lets qualifying capital expenditure offset statutory income within approved periods and limits.",
+      "summary_zh": "ITA 允许符合条件的资本支出在批准期限和比例内抵扣法定收入。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c002", "mida-nif-c008"]
+    },
+    {
+      "slug": "concept/nia-scorecard",
+      "title_en": "NIA Scorecard",
+      "title_zh": "NIA 评分卡",
+      "page_type": "concept",
+      "aliases": [],
+      "summary_en": "The NIA Scorecard evaluates manufacturing investment commitments against national investment outcome pillars.",
+      "summary_zh": "NIA 评分卡根据国家投资成果支柱评估制造业投资项目的承诺和潜在贡献。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c006", "mida-nif-c010", "mida-nif-c011", "mida-nif-c012"]
+    },
+    {
+      "slug": "concept/tiering-approach",
+      "title_en": "Tiering Approach",
+      "title_zh": "分层机制",
+      "page_type": "concept",
+      "aliases": [],
+      "summary_en": "The tiering approach links incentive quality to scorecard results and compliance with minimum and additional conditions.",
+      "summary_zh": "分层机制把激励力度与评分卡结果、最低条件和附加条件的履行情况绑定。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c006", "mida-nif-c007", "mida-nif-c008"]
+    },
+    {
+      "slug": "concept/global-minimum-tax",
+      "title_en": "Global Minimum Tax",
+      "title_zh": "全球最低税",
+      "page_type": "concept",
+      "aliases": ["GMT", "Pillar Two", "GloBE Rules"],
+      "summary_en": "GMT is Malaysia's 2025 implementation of Pillar Two rules for groups with annual global revenue of at least EUR 750 million.",
+      "summary_zh": "GMT 是马来西亚自 2025 年实施的第二支柱规则，适用于全球年收入至少 7.5 亿欧元的集团。",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c009"]
+    }
+  ]
+}

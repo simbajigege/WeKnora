@@ -1,0 +1,99 @@
+{
+  "sample_id": "mida-nif-2026",
+  "source_pdf": "dataset/samples/Malaysia_MIDA_NIF_Manufacturing_Guidelines_2026.pdf",
+  "source_title": "Guidelines of Tax Incentives for New Investment in the Manufacturing Sector under the New Incentive Framework (NIF)",
+  "source_date": "2026-01-15",
+  "note": "Offline wiki sample following WeKnora wiki page conventions. chunk_refs are illustrative stable sample IDs, not database UUIDs.",
+  "pages": [
+    {
+      "slug": "summary/malaysia-mida-nif-manufacturing-guidelines-2026",
+      "title": "MIDA NIF Manufacturing Guidelines 2026",
+      "page_type": "summary",
+      "status": "published",
+      "summary": "Malaysia's 2026 NIF manufacturing guidelines define eligible applicants, tax incentive options, NIA scorecard evaluation, tiering mechanics, compliance duties, exclusions, and sustainability requirements.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": []
+    },
+    {
+      "slug": "entity/malaysian-investment-development-authority",
+      "title": "Malaysian Investment Development Authority",
+      "page_type": "entity",
+      "aliases": ["MIDA"],
+      "summary": "MIDA is the Malaysian authority receiving applications, issuing principle approval letters, monitoring compliance reports, and serving as the contact point for NIF manufacturing incentives.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c004", "mida-nif-c005", "mida-nif-c008"]
+    },
+    {
+      "slug": "entity/new-incentive-framework",
+      "title": "New Incentive Framework",
+      "page_type": "entity",
+      "aliases": ["NIF"],
+      "summary": "NIF is Malaysia's 2026 phased incentive framework that uses tiered, outcome-based evaluation to attract high-growth and high-value manufacturing investments.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c002", "mida-nif-c006"]
+    },
+    {
+      "slug": "entity/national-investment-aspirations",
+      "title": "National Investment Aspirations",
+      "page_type": "entity",
+      "aliases": ["NIA"],
+      "summary": "NIA is one of the cornerstone national strategies guiding the NIF and the source of the scorecard pillars used to evaluate investment outcomes.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c006", "mida-nif-c010"]
+    },
+    {
+      "slug": "entity/new-industrial-master-plan-2030",
+      "title": "New Industrial Master Plan 2030",
+      "page_type": "entity",
+      "aliases": ["NIMP 2030"],
+      "summary": "NIMP 2030 is a Malaysian industrial policy blueprint referenced by NIF and used to identify targeted manufacturing sectors and strategic project alignment.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c001", "mida-nif-c011"]
+    },
+    {
+      "slug": "concept/special-tax-rate",
+      "title": "Special Tax Rate",
+      "page_type": "concept",
+      "aliases": ["STR"],
+      "summary": "Special Tax Rate is a NIF incentive that reduces corporate income tax for qualifying projects for up to 15 years, subject to annual compliance.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c002", "mida-nif-c007"]
+    },
+    {
+      "slug": "concept/investment-tax-allowance",
+      "title": "Investment Tax Allowance",
+      "page_type": "concept",
+      "aliases": ["ITA"],
+      "summary": "Investment Tax Allowance is a capital expenditure-based NIF incentive allowing qualifying expenditure to offset statutory income within approved periods and limits.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c002", "mida-nif-c008"]
+    },
+    {
+      "slug": "concept/nia-scorecard",
+      "title": "NIA Scorecard",
+      "page_type": "concept",
+      "aliases": [],
+      "summary": "The NIA Scorecard is the core evaluation tool for NIF manufacturing incentives, measuring project commitments against national investment outcome pillars.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c006", "mida-nif-c010", "mida-nif-c011", "mida-nif-c012"]
+    },
+    {
+      "slug": "concept/tiering-approach",
+      "title": "Tiering Approach",
+      "page_type": "concept",
+      "aliases": [],
+      "summary": "The tiering approach links incentive quantum to NIA Scorecard quality and annual or period-end compliance with minimum and additional conditions.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c006", "mida-nif-c007", "mida-nif-c008"]
+    },
+    {
+      "slug": "concept/global-minimum-tax",
+      "title": "Global Minimum Tax",
+      "page_type": "concept",
+      "aliases": ["GMT", "Pillar Two", "GloBE Rules"],
+      "summary": "Global Minimum Tax is Malaysia's 2025 implementation of Pillar Two rules affecting groups with annual global revenue of at least EUR 750 million.",
+      "source_refs": ["sample-mida-nif-2026|Malaysia MIDA NIF Manufacturing Guidelines 2026"],
+      "chunk_refs": ["mida-nif-c009"]
+    }
+  ]
+}

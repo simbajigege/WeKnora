@@ -8,7 +8,7 @@ import (
 
 const (
 	// DeepSeekBaseURL DeepSeek 官方 API BaseURL
-	DeepSeekBaseURL = "https://api.deepseek.com/v1"
+	DeepSeekBaseURL = "https://api.deepseek.com"
 )
 
 // DeepSeekProvider 实现 DeepSeek 的 Provider 接口
