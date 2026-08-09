@@ -121,7 +121,11 @@ export interface KBModelConfigRequest {
         chunkSize: number
         chunkOverlap: number
         separators: string[]
-        parserEngineRules?: { file_types: string[]; engine: string }[]
+        parserEngineRules?: {
+            file_types: string[]
+            engine: string
+            xlsx_first_row_as_header?: boolean
+        }[]
         enableParentChild?: boolean
         parentChunkSize?: number
         childChunkSize?: number
@@ -142,6 +146,7 @@ export interface KBModelConfigRequest {
         enabled: boolean
     }
     /** 存储引擎选择："local" | "minio" | "cos" | "obs" 等，影响文档上传与文档内图片存储 */
+    storageBackendId?: string
     storageProvider?: string
     nodeExtract: {
         enabled: boolean
@@ -464,7 +469,7 @@ export function testMultimodalFunction(testData: {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        // 跨租户访问请求头：直接附，避免 short-circuit "selectedTenantId
+        // 跨空间访问请求头：直接附，避免 short-circuit "selectedTenantId
         // === defaultTenantId 时不附" 在某些边角下让 header 静默丢失。
         // 与 utils/request.ts、api/chat/streame.ts 行为一致。
         const selectedTenantId = localStorage.getItem('weknora_selected_tenant_id');

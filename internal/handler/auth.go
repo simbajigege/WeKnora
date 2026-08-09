@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/handler/dto"
@@ -101,6 +103,31 @@ func (h *AuthHandler) resolveRegistrationMode(ctx context.Context) string {
 	return h.systemSettingSvc.GetString(ctx, "auth.registration_mode", "", def)
 }
 
+// resolveDefaultTenantMode returns the provisioning policy for ordinary
+// public password registrations. Invitation registration never uses this
+// value: the invitation itself supplies the target tenant.
+func (h *AuthHandler) resolveDefaultTenantMode(ctx context.Context) types.TenantProvisioningMode {
+	def := config.AuthDefaultTenantModeCreatePersonal
+	if h.configInfo != nil && h.configInfo.Auth != nil {
+		if mode := strings.TrimSpace(h.configInfo.Auth.DefaultTenantMode); mode != "" {
+			def = mode
+		}
+	}
+	mode := def
+	if h.systemSettingSvc != nil {
+		mode = h.systemSettingSvc.GetString(
+			ctx,
+			"auth.default_tenant_mode",
+			"WEKNORA_AUTH_DEFAULT_TENANT_MODE",
+			def,
+		)
+	}
+	if mode == config.AuthDefaultTenantModeTenantless {
+		return types.TenantProvisioningTenantless
+	}
+	return types.TenantProvisioningCreatePersonal
+}
+
 // Register godoc
 // @Summary      用户注册
 // @Description  注册新用户账号
@@ -139,7 +166,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	req.Username = secutils.SanitizeForLog(req.Username)
 	req.Email = secutils.SanitizeForLog(req.Email)
-	req.Password = secutils.SanitizeForLog(req.Password)
+	// Password is intentionally NOT sanitized: SanitizeForLog replaces
+	// \n, \r, \t and strips other control characters so a string is safe
+	// to write into a log line. Applying it to a real password would
+	// silently rewrite the credential before hashing, so registration
+	// would succeed but login with the original password would fail.
+	// Passwords must never be logged, so they don't need that defence.
 
 	// Validate required fields
 	if req.Username == "" || req.Email == "" || req.Password == "" {
@@ -150,6 +182,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	req.Username = secutils.SanitizeForLog(req.Username)
 	req.Email = secutils.SanitizeForLog(req.Email)
+	req.TenantProvisioning = h.resolveDefaultTenantMode(ctx)
 	// Call service to register user
 	user, err := h.userService.Register(ctx, &req)
 	if err != nil {
@@ -327,7 +360,7 @@ func (h *AuthHandler) OIDCRedirectCallback(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.userService.LoginWithOIDC(ctx, code, strings.TrimSpace(decodedState.RedirectURI))
+	resp, err := h.userService.LoginWithOIDC(ctx, code, strings.TrimSpace(decodedState.RedirectURI), h.resolveDefaultTenantMode(ctx))
 	if err != nil {
 		logger.Errorf(ctx, "Failed to complete OIDC login via redirect callback: %v", err)
 		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed")+"&oidc_error_description="+urlQueryEscape(err.Error()))
@@ -536,12 +569,18 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	// 同步返回当前用户的 memberships，让前端在页面刷新（仅命中 /auth/me）
 	// 后也能恢复 currentTenantRole，避免角色信息只在 login 那一刻可用。
 	memberships := h.userService.BuildLoginMemberships(ctx, user, tenant)
+	canCreateTenant := user.CanAccessAllTenants ||
+		resolveTenantSelfServiceCreationEnabled(ctx, h.configInfo, h.systemSettingSvc)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"user":        userInfo,
-			"tenant":      dto.NewTenantResponse(ctx, tenant),
-			"memberships": memberships,
+			"user":            userInfo,
+			"tenant":          dto.NewTenantResponse(ctx, tenant),
+			"memberships":     memberships,
+			"tenant_required": tenant == nil,
+			"capabilities": gin.H{
+				"can_create_tenant": canCreateTenant,
+			},
 		},
 	})
 }
@@ -551,10 +590,9 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 // (preserve existing value) from "explicit false". See
 // types.UserPreferences for the persistence-layer counterpart.
 type updateMyPreferencesRequest struct {
-	EnableMemory *bool `json:"enable_memory"`
 	// LastActiveTenantID lets the SPA persist "after a fresh login,
 	// drop me back into this workspace" across devices. Send a positive
-	// tenant id to set / replace, or 0 to clear. Membership is validated
+	// workspace id to set / replace, or 0 to clear. Membership is validated
 	// at next login, not here. Nil = field omitted from the PATCH and
 	// stays untouched.
 	LastActiveTenantID *uint64 `json:"last_active_tenant_id"`
@@ -591,7 +629,6 @@ func (h *AuthHandler) UpdateMyPreferences(c *gin.Context) {
 	}
 
 	patch := types.UserPreferences{
-		EnableMemory:       req.EnableMemory,
 		LastActiveTenantID: req.LastActiveTenantID,
 	}
 	prefs, err := h.userService.UpdateUserPreferences(ctx, user.ID, patch)
@@ -610,7 +647,7 @@ func (h *AuthHandler) UpdateMyPreferences(c *gin.Context) {
 
 // ChangePassword godoc
 // @Summary      修改密码
-// @Description  修改当前用户的登录密码
+// @Description  修改当前用户的登录密码。新密码须满足 8–32 位且同时包含字母与数字；成功后所有会话被撤销，需重新登录。
 // @Tags         认证
 // @Accept       json
 // @Produce      json
@@ -626,7 +663,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	var req struct {
 		OldPassword string `json:"old_password" binding:"required"`
-		NewPassword string `json:"new_password" binding:"required,min=6"`
+		NewPassword string `json:"new_password" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -648,10 +685,28 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	// Change password
 	err = h.userService.ChangePassword(ctx, user.ID, req.OldPassword, req.NewPassword)
 	if err != nil {
-		logger.Errorf(ctx, "Failed to change password: %v", err)
-		appErr := errors.NewBadRequestError("Password change failed").WithDetails(err.Error())
-		c.Error(appErr)
-		return
+		switch {
+		case stderrors.Is(err, service.ErrPasswordPolicy):
+			appErr := errors.NewValidationError("Password policy violation").
+				WithDetails(service.DetailPasswordPolicy)
+			c.Error(appErr)
+			return
+		case stderrors.Is(err, service.ErrInvalidOldPassword):
+			appErr := errors.NewBadRequestError("Current password is incorrect").
+				WithDetails(service.DetailInvalidOldPassword)
+			c.Error(appErr)
+			return
+		case stderrors.Is(err, service.ErrSamePassword):
+			appErr := errors.NewValidationError("New password must differ from current password").
+				WithDetails(service.DetailSamePassword)
+			c.Error(appErr)
+			return
+		default:
+			logger.Errorf(ctx, "Failed to change password: %v", err)
+			appErr := errors.NewBadRequestError("Password change failed").WithDetails(err.Error())
+			c.Error(appErr)
+			return
+		}
 	}
 
 	logger.Infof(ctx, "Password changed successfully for user: %s", user.Email)
@@ -685,15 +740,15 @@ func (h *AuthHandler) GetAuthConfig(c *gin.Context) {
 }
 
 // SwitchTenant godoc
-// @Summary      切换激活租户
-// @Description  为当前用户在目标租户重新签发访问令牌；要求该用户在目标租户存在 active 成员关系
+// @Summary      切换激活空间
+// @Description  为当前用户在目标空间重新签发访问令牌；要求该用户在目标空间存在 active 成员关系
 // @Tags         认证
 // @Accept       json
 // @Produce      json
 // @Param        request  body      object{tenant_id=integer,refresh_token=string}  true  "切换请求"
 // @Success      200      {object}  types.LoginResponse
 // @Failure      400      {object}  errors.AppError  "参数错误"
-// @Failure      403      {object}  errors.AppError  "无该租户成员关系"
+// @Failure      403      {object}  errors.AppError  "无该空间成员关系"
 // @Security     Bearer
 // @Router       /auth/switch-tenant [post]
 //
@@ -708,7 +763,7 @@ func (h *AuthHandler) SwitchTenant(c *gin.Context) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		appErr := errors.NewValidationError("Invalid switch-tenant request").WithDetails(err.Error())
+		appErr := errors.NewValidationError("Invalid workspace switch request").WithDetails(err.Error())
 		c.Error(appErr)
 		return
 	}
@@ -723,7 +778,7 @@ func (h *AuthHandler) SwitchTenant(c *gin.Context) {
 	resp, err := h.userService.SwitchTenant(ctx, user, req.TenantID, req.RefreshToken)
 	if err != nil {
 		logger.Errorf(ctx, "SwitchTenant failed user=%s target=%d: %v", user.ID, req.TenantID, err)
-		appErr := errors.NewForbiddenError("switch tenant failed").WithDetails(err.Error())
+		appErr := errors.NewForbiddenError("workspace switch failed").WithDetails(err.Error())
 		c.Error(appErr)
 		return
 	}
@@ -732,7 +787,7 @@ func (h *AuthHandler) SwitchTenant(c *gin.Context) {
 }
 
 // @Summary      自动初始化（Lite 桌面版）
-// @Description  Lite 版专用：首次启动时自动创建默认用户和租户并返回令牌，后续启动直接签发令牌，免除手动注册/登录流程
+// @Description  Lite 版专用：首次启动时自动创建默认用户和空间并返回令牌，后续启动直接签发令牌，免除手动注册/登录流程
 // @Tags         认证
 // @Accept       json
 // @Produce      json

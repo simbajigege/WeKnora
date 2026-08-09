@@ -30,15 +30,23 @@ type s3FileService struct {
 }
 
 // newS3Client creates a bare s3FileService with just the SDK client initialised.
-func newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix string) (*s3FileService, error) {
+func newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix string, forcePathStyle bool) (*s3FileService, error) {
 	var cfg aws.Config
 	var err error
 
-	// Configure AWS SDK
-	cfg, err = config.LoadDefaultConfig(context.Background(),
-		config.WithRegion(region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
-	)
+	// With no explicit AK/SK, keep the AWS default credential chain intact. This
+	// supports IAM roles for EC2/ECS/EKS (IRSA), web identity, shared config, and
+	// environment credentials without persisting long-lived keys in WeKnora.
+	loadOptions := []func(*config.LoadOptions) error{config.WithRegion(region)}
+	if accessKey != "" || secretKey != "" {
+		if accessKey == "" || secretKey == "" {
+			return nil, fmt.Errorf("S3 access key and secret key must be provided together")
+		}
+		loadOptions = append(loadOptions, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		))
+	}
+	cfg, err = config.LoadDefaultConfig(context.Background(), loadOptions...)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
@@ -49,7 +57,7 @@ func newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix 
 	// (endpoint/bucket/key) instead of virtual-hosted style (bucket.endpoint/key).
 	var client *s3.Client
 	if endpoint != "" {
-		usePathStyle := !strings.Contains(endpoint, "amazonaws.com")
+		usePathStyle := forcePathStyle || !strings.Contains(endpoint, "amazonaws.com")
 		client = s3.NewFromConfig(cfg, func(o *s3.Options) {
 			o.BaseEndpoint = aws.String(endpoint)
 			o.UsePathStyle = usePathStyle
@@ -76,7 +84,7 @@ func newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix 
 func NewS3FileService(endpoint,
 	accessKey, secretKey, bucketName, region, pathPrefix string,
 ) (interfaces.FileService, error) {
-	svc, err := newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix)
+	svc, err := newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix, false)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +101,25 @@ func NewS3FileService(endpoint,
 		}
 	}
 
+	return svc, nil
+}
+
+// NewS3FileServiceWithOptions is the instance-aware S3 constructor. Existing
+// callers keep the historical endpoint-based path-style inference.
+func NewS3FileServiceWithOptions(endpoint, accessKey, secretKey, bucketName, region, pathPrefix string, forcePathStyle bool) (interfaces.FileService, error) {
+	svc, err := newS3Client(endpoint, accessKey, secretKey, bucketName, region, pathPrefix, forcePathStyle)
+	if err != nil {
+		return nil, err
+	}
+	exists, err := svc.bucketExists(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to check bucket: %w", err)
+	}
+	if !exists {
+		if err = svc.createBucket(context.Background()); err != nil {
+			return nil, fmt.Errorf("failed to create bucket: %w", err)
+		}
+	}
 	return svc, nil
 }
 
@@ -145,7 +172,11 @@ func (s *s3FileService) CheckConnectivity(ctx context.Context) error {
 // CheckS3Connectivity tests S3 connectivity using the provided credentials.
 // It creates a temporary service instance internally and delegates to CheckConnectivity.
 func CheckS3Connectivity(ctx context.Context, endpoint, accessKey, secretKey, bucketName, region string) error {
-	svc, err := newS3Client(endpoint, accessKey, secretKey, bucketName, region, "")
+	return CheckS3ConnectivityWithOptions(ctx, endpoint, accessKey, secretKey, bucketName, region, false)
+}
+
+func CheckS3ConnectivityWithOptions(ctx context.Context, endpoint, accessKey, secretKey, bucketName, region string, forcePathStyle bool) error {
+	svc, err := newS3Client(endpoint, accessKey, secretKey, bucketName, region, "", forcePathStyle)
 	if err != nil {
 		return err
 	}

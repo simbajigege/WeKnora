@@ -100,9 +100,9 @@ type Tenant struct {
 	StorageQuota int64 `yaml:"storage_quota"       json:"storage_quota"       gorm:"default:10737418240"`
 	// Storage used (Bytes)
 	StorageUsed int64 `yaml:"storage_used"        json:"storage_used"        gorm:"default:0"`
-	// Global Context configuration for this tenant (default for all sessions)
+	// Global Context configuration for this workspace (default for all sessions)
 	ContextConfig *ContextConfig `yaml:"context_config"      json:"context_config"      gorm:"type:jsonb"`
-	// Global WebSearch configuration for this tenant
+	// Global WebSearch configuration for this workspace
 	WebSearchConfig *WebSearchConfig `yaml:"web_search_config"   json:"web_search_config"   gorm:"type:jsonb"`
 	// Parser engine config overrides (MinerU endpoint, API key, etc.). Used when parsing documents; overrides env.
 	ParserEngineConfig *ParserEngineConfig `yaml:"parser_engine_config" json:"parser_engine_config" gorm:"type:jsonb"`
@@ -110,6 +110,8 @@ type Tenant struct {
 	Credentials *CredentialsConfig `yaml:"credentials" json:"credentials" gorm:"type:jsonb"`
 	// Storage engine config: parameters for Local, MinIO, COS. Used for document/file storage and docreader.
 	StorageEngineConfig *StorageEngineConfig `yaml:"storage_engine_config" json:"storage_engine_config" gorm:"type:jsonb"`
+	// DefaultStorageBackendID is the workspace default concrete storage instance.
+	DefaultStorageBackendID *string `yaml:"default_storage_backend_id" json:"default_storage_backend_id,omitempty" gorm:"column:default_storage_backend_id;type:varchar(36)"`
 	// Chat history config: knowledge base configuration for indexing and searching chat messages via vector search
 	ChatHistoryConfig *ChatHistoryConfig `yaml:"chat_history_config" json:"chat_history_config" gorm:"type:jsonb"`
 	// Retrieval config: global search/retrieval parameters shared by knowledge search and message search
@@ -300,16 +302,22 @@ func (c *CredentialsConfig) Scan(value interface{}) error {
 // ParserEngineConfig holds tenant-level overrides for document parser engines (e.g. MinerU endpoint, API key).
 // These values take precedence over environment variables when parsing documents.
 type ParserEngineConfig struct {
-	MinerUEndpoint string `json:"mineru_endpoint"` // MinerU 自建服务端点
-	MinerUAPIKey   string `json:"mineru_api_key"`  // MinerU 云 API Key
+	// ChatParserEngineRules selects parser engines for session-scoped chat
+	// documents. Knowledge bases keep their own rules in ChunkingConfig.
+	ChatParserEngineRules []ParserEngineRule `json:"chat_parser_engine_rules,omitempty"`
+	MinerUEndpoint        string             `json:"mineru_endpoint"` // MinerU 自建服务端点
+	MinerUAPIKey          string             `json:"mineru_api_key"`  // MinerU 云 API Key
 
 	// MinerU 自建解析参数
 	MinerUModel         string `json:"mineru_model,omitempty"`          // backend: pipeline, vlm-*, hybrid-*
 	MinerUVLMServerURL  string `json:"mineru_vlm_server_url,omitempty"` // vLLM 服务器地址 (vlm-http-client / hybrid-http-client)
 	MinerUEnableFormula *bool  `json:"mineru_enable_formula,omitempty"`
 	MinerUEnableTable   *bool  `json:"mineru_enable_table,omitempty"`
-	MinerUEnableOCR     *bool  `json:"mineru_enable_ocr,omitempty"`
-	MinerULanguage      string `json:"mineru_language,omitempty"`
+	MinerUParseMethod   string `json:"mineru_parse_method,omitempty"`
+	// MinerUEnableOCR is retained for compatibility with configurations saved
+	// before parse_method supported auto/ocr/txt.
+	MinerUEnableOCR *bool  `json:"mineru_enable_ocr,omitempty"`
+	MinerULanguage  string `json:"mineru_language,omitempty"`
 
 	// MinerU 云 API 解析参数
 	MinerUCloudModel         string `json:"mineru_cloud_model,omitempty"` // model_version: pipeline, vlm, MinerU-HTML
@@ -337,6 +345,47 @@ type ParserEngineConfig struct {
 	PaddleOCRVLCloudUseChartRecognition *bool  `json:"paddleocr_vl_cloud_use_chart_recognition,omitempty"`
 }
 
+const (
+	MinerUParseMethodAuto = "auto"
+	MinerUParseMethodOCR  = "ocr"
+	MinerUParseMethodText = "txt"
+)
+
+// ResolveMinerUParseMethod normalizes the explicit MinerU parse method and
+// maps the legacy OCR toggle to the closest safe behavior. The old enabled
+// value maps to auto instead of ocr so digital PDFs keep their native text
+// layer while scanned PDFs are still detected and OCRed by MinerU.
+func ResolveMinerUParseMethod(method string, legacyOCREnabled *bool) string {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case MinerUParseMethodAuto:
+		return MinerUParseMethodAuto
+	case MinerUParseMethodOCR:
+		return MinerUParseMethodOCR
+	case MinerUParseMethodText:
+		return MinerUParseMethodText
+	}
+
+	if legacyOCREnabled != nil && !*legacyOCREnabled {
+		return MinerUParseMethodText
+	}
+	return MinerUParseMethodAuto
+}
+
+func (c *ParserEngineConfig) ResolveChatParserEngine(fileType string) string {
+	if c == nil {
+		return ""
+	}
+	fileType = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(fileType)), ".")
+	for _, rule := range c.ChatParserEngineRules {
+		for _, candidate := range rule.FileTypes {
+			if strings.TrimPrefix(strings.ToLower(strings.TrimSpace(candidate)), ".") == fileType {
+				return strings.TrimSpace(rule.Engine)
+			}
+		}
+	}
+	return ""
+}
+
 // ToOverridesMap returns a map suitable for ParserEngineOverrides in parse requests.
 // Keys are snake_case (mineru_endpoint, mineru_api_key, etc.).
 func (c *ParserEngineConfig) ToOverridesMap() map[string]string {
@@ -361,6 +410,9 @@ func (c *ParserEngineConfig) ToOverridesMap() map[string]string {
 	}
 	if c.MinerUEnableTable != nil {
 		m["mineru_enable_table"] = fmt.Sprintf("%v", *c.MinerUEnableTable)
+	}
+	if c.MinerUParseMethod != "" || c.MinerUEnableOCR != nil {
+		m["mineru_parse_method"] = ResolveMinerUParseMethod(c.MinerUParseMethod, c.MinerUEnableOCR)
 	}
 	if c.MinerUEnableOCR != nil {
 		m["mineru_enable_ocr"] = fmt.Sprintf("%v", *c.MinerUEnableOCR)
@@ -478,22 +530,26 @@ type MinIOEngineConfig struct {
 
 // COSEngineConfig is for Tencent Cloud COS.
 type COSEngineConfig struct {
-	SecretID   string `json:"secret_id"`
-	SecretKey  string `json:"secret_key"`
-	Region     string `json:"region"`
-	BucketName string `json:"bucket_name"`
-	AppID      string `json:"app_id"`
-	PathPrefix string `json:"path_prefix"`
+	SecretID       string `json:"secret_id"`
+	SecretKey      string `json:"secret_key"`
+	Region         string `json:"region"`
+	BucketName     string `json:"bucket_name"`
+	AppID          string `json:"app_id"`
+	PathPrefix     string `json:"path_prefix"`
+	TempBucketName string `json:"temp_bucket_name"`
+	TempRegion     string `json:"temp_region"`
 }
 
 // TOSEngineConfig is for Volcengine TOS (火山引擎对象存储).
 type TOSEngineConfig struct {
-	Endpoint   string `json:"endpoint"`
-	Region     string `json:"region"`
-	AccessKey  string `json:"access_key"`
-	SecretKey  string `json:"secret_key"`
-	BucketName string `json:"bucket_name"`
-	PathPrefix string `json:"path_prefix"`
+	Endpoint       string `json:"endpoint"`
+	Region         string `json:"region"`
+	AccessKey      string `json:"access_key"`
+	SecretKey      string `json:"secret_key"`
+	BucketName     string `json:"bucket_name"`
+	PathPrefix     string `json:"path_prefix"`
+	TempBucketName string `json:"temp_bucket_name"`
+	TempRegion     string `json:"temp_region"`
 }
 
 // S3EngineConfig is for AWS S3 and S3-compatible object storage.

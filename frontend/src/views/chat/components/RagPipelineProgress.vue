@@ -1,14 +1,19 @@
 <template>
   <div v-if="visible" ref="rootElement" class="rag-pipeline-progress">
+    <!-- Announcements need a region that outlives each wait row, otherwise screen
+         readers miss a live region that appears together with its own text. -->
+    <div class="sr-only" role="status" aria-live="polite">{{ liveStatusText }}</div>
+
     <div v-if="showPrePipelineWait" class="tree-children">
       <div class="tree-child tree-child-last streaming-loading-node">
         <div class="tree-branch" />
         <div class="tree-child-content">
-          <div class="loading-indicator">
-            <div class="loading-typing">
-              <span />
-              <span />
-              <span />
+          <div class="action-card action-pending">
+            <div class="action-header no-results">
+              <div class="action-title">
+                <t-icon class="action-title-icon" name="lightbulb" />
+                <span class="action-name">{{ t('chat.preparingAnswer') }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -19,6 +24,7 @@
       <div v-for="(step, index) in steps" :key="step.id" class="tree-child" :class="{
         'tree-child-last':
           !showDoneRow
+          && !showWaitStep
           && !showThinkingStep
           && index === steps.length - 1,
       }">
@@ -51,6 +57,25 @@
         </div>
       </div>
 
+      <div
+        v-if="showWaitStep"
+        class="tree-child tree-child-last streaming-loading-node rag-model-wait-step"
+      >
+        <div class="tree-branch" />
+        <div class="tree-child-content">
+          <div class="tool-event">
+            <div class="action-card" :class="{ 'action-pending': !waitStepStalled }">
+              <div class="action-header no-results">
+                <div class="action-title">
+                  <t-icon class="action-title-icon" name="lightbulb" />
+                  <span class="action-name">{{ waitStepText }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showThinkingStep" class="tree-child rag-thinking-step"
         :class="{ 'tree-child-last': !showDoneRow }">
         <div class="tree-branch" />
@@ -63,14 +88,7 @@
                   <span class="action-name">{{ t('agent.think') }}</span>
                 </div>
               </div>
-              <div v-if="thinkingPending && !thinkingContent" class="thinking-loading">
-                <div class="loading-typing">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-              <div v-else-if="thinkingContent && thinkingExpanded" class="thinking-detail-content">
+              <div v-if="thinkingContent && thinkingExpanded" class="thinking-detail-content">
                 {{ thinkingContent }}
               </div>
             </div>
@@ -165,14 +183,7 @@
                     <span class="action-name">{{ t('agent.think') }}</span>
                   </div>
                 </div>
-                <div v-if="thinkingPending && !thinkingContent" class="thinking-loading">
-                  <div class="loading-typing">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-                <div v-else-if="thinkingContent && thinkingExpanded" class="thinking-detail-content">
+                <div v-if="thinkingContent && thinkingExpanded" class="thinking-detail-content">
                   {{ thinkingContent }}
                 </div>
               </div>
@@ -201,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getAgentToolIconName } from '@/utils/agent-tool-icons'
 import {
@@ -209,9 +220,15 @@ import {
   getRagPipelineStepTitle,
   getRetrievalSearchSource,
 } from '@/utils/agent-tool-display'
-import { RAG_PIPELINE_TOOL_NAMES } from '@/utils/rag-pipeline-history'
+import { getAttachmentParsingSummaryHtml } from '@/utils/attachmentParsingDisplay'
+import { RAG_RETRIEVAL_TOOL_NAMES, RAG_TIMELINE_TOOL_NAMES } from '@/utils/rag-pipeline-history'
 import { useChatReferencesDrawer } from '@/composables/useChatReferencesDrawer'
 import { buildReferenceSections } from '@/utils/referenceSources'
+import {
+  createRagWaitController,
+  getRagPipelineWaitKind,
+  type RagWaitView,
+} from '@/utils/rag-pipeline-state'
 
 const props = defineProps<{
   session?: {
@@ -229,6 +246,10 @@ const referencesDrawer = useChatReferencesDrawer()
 const userExpanded = ref(false)
 const thinkingExpanded = ref(true)
 const rootElement = ref<HTMLElement | null>(null)
+const waitView = ref<RagWaitView>({ kind: 'none', stalled: false })
+const waitController = createRagWaitController((view) => {
+  waitView.value = view
+})
 
 const thinkingContent = computed(() => {
   const stream = props.session?.agentEventStream
@@ -275,7 +296,7 @@ const steps = computed(() => {
       return (
         event.type === 'tool_call' &&
         typeof event.tool_name === 'string' &&
-        RAG_PIPELINE_TOOL_NAMES.has(event.tool_name)
+        RAG_TIMELINE_TOOL_NAMES.has(event.tool_name)
       )
     })
     .map((event) => {
@@ -286,18 +307,22 @@ const steps = computed(() => {
           ? (event.tool_data as Record<string, unknown>)
           : null
 
-      const isSearchTool = toolName === 'knowledge_search' || toolName === 'search_knowledge'
+      const isSearchTool = RAG_RETRIEVAL_TOOL_NAMES.has(toolName)
+      const isAttachmentTool = toolName === 'attachment_parsing' || toolName === 'image_analysis'
       const searchSource = isSearchTool
         ? getRetrievalSearchSource(event.arguments, toolData)
         : undefined
-      const summaryHtml =
-        !pending && isSearchTool && toolData
-          ? getKnowledgeSearchSummaryHtml(t, toolData)
-          : ''
+      let summaryHtml = ''
+      if (!pending && isSearchTool && toolData) {
+        summaryHtml = getKnowledgeSearchSummaryHtml(t, toolData)
+      } else if (!pending && isAttachmentTool) {
+        summaryHtml = getAttachmentParsingSummaryHtml(t, event)
+      }
       const canOpenReferences = !pending && isSearchTool && hasReferences.value
 
       return {
         id: String(event.tool_call_id || `${toolName}-${event.timestamp || 0}`),
+        toolName,
         pending,
         iconName: getAgentToolIconName(toolName, searchSource),
         title: getRagPipelineStepTitle(t, {
@@ -316,6 +341,30 @@ const steps = computed(() => {
 const allStepsDone = computed(
   () => steps.value.length > 0 && steps.value.every((step) => !step.pending),
 )
+
+const hasCompletedRetrievalStep = computed(() => steps.value.some(
+  (step) => RAG_RETRIEVAL_TOOL_NAMES.has(step.toolName) && !step.pending,
+))
+
+const waitKind = computed(() => getRagPipelineWaitKind({
+  isCompleted: Boolean(props.session?.is_completed),
+  hasAnswer: hasAnswer.value,
+  hasThinkingEvent: hasThinkingEvent.value,
+  stepCount: steps.value.length,
+  allStepsDone: allStepsDone.value,
+  hasCompletedRetrievalStep: hasCompletedRetrievalStep.value,
+}))
+
+const showWaitStep = computed(() => waitView.value.kind !== 'none')
+
+const waitStepStalled = computed(() => waitView.value.stalled)
+
+const waitStepText = computed(() => {
+  if (waitView.value.stalled) return t('chat.modelStillResponding')
+  return waitView.value.kind === 'model'
+    ? t('chat.connectingModelAndGeneratingAnswer')
+    : t('chat.preparingAnswer')
+})
 
 const showCollapsedRoot = computed(
   () =>
@@ -365,6 +414,12 @@ const isThinkingStreaming = computed(
 const visible = computed(
   () => steps.value.length > 0 || showPrePipelineWait.value || showThinkingStep.value,
 )
+
+const liveStatusText = computed(() => {
+  if (showPrePipelineWait.value) return t('chat.preparingAnswer')
+  if (showWaitStep.value) return waitStepText.value
+  return ''
+})
 
 const collapsedStatusText = computed(() => {
   if (steps.value.length === 0) {
@@ -431,6 +486,8 @@ watch(thinkingPending, (pending) => {
   }
 })
 
+watch(waitKind, (kind) => waitController.update(kind), { immediate: true })
+
 watch(hasAnswer, (answered) => {
   if (answered && hasThinking.value) {
     thinkingExpanded.value = false
@@ -446,6 +503,10 @@ watch(thinkingExpanded, (expanded) => {
   if (!expanded || !isThinkingStreaming.value) return
   scrollThinkingDetailToBottom()
 })
+
+onBeforeUnmount(() => {
+  waitController.dispose()
+})
 </script>
 
 <style scoped lang="less">
@@ -458,6 +519,18 @@ watch(thinkingExpanded, (expanded) => {
   --agent-step-icon-color: var(--td-text-color-placeholder);
 
   margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .tree-container {
@@ -632,7 +705,7 @@ watch(thinkingExpanded, (expanded) => {
     font-weight: 400;
     color: var(--td-text-color-secondary);
     word-break: break-word;
-    max-width: min(680px, 100%);
+    max-width: min(820px, 100%);
   }
 }
 
@@ -653,10 +726,6 @@ watch(thinkingExpanded, (expanded) => {
 }
 
 .rag-thinking-step {
-  .thinking-loading {
-    padding: 4px 0 0;
-  }
-
   .thinking-detail-content {
     margin-top: 4px;
     padding: 0;
